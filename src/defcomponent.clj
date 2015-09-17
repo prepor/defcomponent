@@ -67,7 +67,7 @@
 (defn normalize-specs
   [specs]
   (let [normalize-spec (fn [spec] (if (symbol? spec)
-                                   [:dependant spec (keyword spec)]
+                                   [:dependant spec (keyword (name spec))]
                                    spec))]
     (map normalize-spec specs)))
 
