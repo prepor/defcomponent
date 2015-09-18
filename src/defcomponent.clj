@@ -56,19 +56,25 @@
 ;;                :file-config "config/hello.clj"
 ;;                :params [1 2 3]
 ;;                :repo {db mocked-db}})
+;;
+;; TODO: свои конструкторы
+;; TODO: динамическое формирование с ::specs
+;; TODO: примеры
 
 (defprotocol Defcomponent
+  (component-keyword [this])
   (component-specs [this]))
 
 (extend-type Object
   Defcomponent
+  (component-keyword [_] (throw "Can't infer name for unknown components"))
   (component-specs [_] []))
 
 (defn normalize-specs
   [specs]
-  (let [normalize-spec (fn [spec] (if (symbol? spec)
-                                   [:dependant spec (keyword (name spec))]
-                                   spec))]
+  (let [normalize-spec (fn [spec] (if (vector? spec)
+                                   spec
+                                   [:dependant spec]))]
     (map normalize-spec specs)))
 
 (defmacro defcomponent
@@ -80,8 +86,9 @@
     `(do
        (defrecord ~record-sym ~(or constructor-binding [])
          Defcomponent
-         (component-specs [this]
-           ~(vec (normalize-specs specs)))
+         (component-keyword [_] ~(keyword n))
+         (component-specs [this#]
+           (concat ~specs (::specs this#)))
          ~@(when (seq lifecycle-description)
              (cons `component/Lifecycle lifecycle-description))
          ~@other-protocols)
@@ -102,7 +109,7 @@
                           (let [[_ to as] spec]
                             (update-in r' [to ::specs] conj [:dependant constructor as]))
                           r'))
-                      r (component-specs component))))
+                      r (normalize-specs (component-specs component)))))
           repository constructors))
 
 (defn- constructor-params
@@ -120,7 +127,7 @@
       (get acc constructor) (recur constructors' acc)
       :else
       (let [component (apply constructor constructor-params)
-            specs (component-specs component)
+            specs (normalize-specs (component-specs component))
             component' (assoc component ::specs specs)]
         (recur (into constructors' (->> specs
                                         (filter #(= :dependant (first %)))
@@ -128,10 +135,12 @@
                (assoc acc constructor component'))))))
 
 (defn- component-dependencies-map
-  [component]
+  [repository component]
   (let [specs (->> (::specs component)
                    (filter #(= :dependant (first %))))]
-    (into {} (for [[_ dependant-constructor key] specs] [key dependant-constructor]))))
+    (into {} (for [[_ dependant-constructor key] specs
+                   :let [key' (or key (component-keyword (get repository dependant-constructor)))]]
+               [key' dependant-constructor]))))
 
 (defn- ->system
   [repository]
@@ -139,7 +148,7 @@
     (into system
           (for [[constructor component] system]
             [constructor
-             (component/using component (component-dependencies-map component))]))))
+             (component/using component (component-dependencies-map repository component))]))))
 
 (defn system
   ([constructors] (system constructors {}))
@@ -166,3 +175,5 @@
 ;; (defcomponent middleware [[:inject-to app :middle]])
 
 ;; (def s (system [app middleware] {:start true :params {:hello 1}}))
+
+
