@@ -67,7 +67,7 @@
 
 (extend-type Object
   Defcomponent
-  (component-keyword [_] (throw "Can't infer name for unknown components"))
+  (component-keyword [this] (throw (Exception. "Can't infer name for unknown components")))
   (component-specs [_] []))
 
 (defn normalize-specs
@@ -155,7 +155,7 @@
   ([constructors {:keys [start file-config params repo]}]
    (let [params' (constructor-params file-config params)
          repository (-> (make-repository constructors params')
-                        (merge (map-vals normalize-specs repo))
+                        (merge repo)
                         (apply-injections constructors))
          system (->system repository)]
      (if start
