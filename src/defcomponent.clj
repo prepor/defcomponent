@@ -120,13 +120,13 @@
 ;; Репозитарий это мапа, где ключ это конструктор, а значение - компоненты,
 ;; полученные путем вызова конструктора
 (defn- make-repository
-  [constructors constructor-params]
+  [constructors constructor-params additions]
   (loop [[constructor & constructors'] constructors acc {}]
     (cond
       (nil? constructor) acc
       (get acc constructor) (recur constructors' acc)
       :else
-      (let [component (apply constructor constructor-params)
+      (let [component (or (get additions constructor) (apply constructor constructor-params))
             specs (normalize-specs (component-specs component))
             component' (assoc component ::specs specs)]
         (recur (into constructors' (->> specs
@@ -154,8 +154,7 @@
   ([constructors] (system constructors {}))
   ([constructors {:keys [start file-config params repo]}]
    (let [params' (constructor-params file-config params)
-         repository (-> (make-repository constructors params')
-                        (merge repo)
+         repository (-> (make-repository constructors params' repo)
                         (apply-injections constructors))
          system (->system repository)]
      (if start
