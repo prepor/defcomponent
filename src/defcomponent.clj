@@ -139,15 +139,17 @@
   (let [specs (->> (::specs component)
                    (filter #(= :dependant (first %))))]
     (into {} (for [[_ dependant-constructor key] specs
-                   :let [key' (or key (component-keyword (get repository dependant-constructor)))]]
-               [key' dependant-constructor]))))
+                   :let [component-key (component-keyword (get repository dependant-constructor))
+                         key' (or key component-key)]]
+               [key' component-key]))))
 
 (defn- ->system
   [repository]
-  (let [system (into (component/system-map) repository)]
+  (let [system (into (component/system-map)
+                     (for [[_ component] repository] [(component-keyword component) component]))]
     (into system
-          (for [[constructor component] system]
-            [constructor
+          (for [[k component] system]
+            [k
              (component/using component (component-dependencies-map repository component))]))))
 
 (defn system
@@ -161,18 +163,16 @@
        (component/start system)
        system))))
 
-;; (defcomponent db []
-;;   [config]
-;;   (start [this] {:connection :im-connection!})
-;;   (stop [this] this))
+(defcomponent db []
+  [config]
+  (start [this] {:connection :im-connection!})
+  (stop [this] this))
 
-;; (defcomponent app [db]
-;;   [config]
-;;   (start [this] this)
-;;   (stop [this] this))
+(defcomponent app [db]
+  [config]
+  (start [this] this)
+  (stop [this] this))
 
-;; (defcomponent middleware [[:inject-to app :middle]])
+(defcomponent middleware [[:inject-to app :middle]])
 
-;; (def s (system [app middleware] {:start true :params {:hello 1}}))
-
-
+(def s (system [app middleware] {:start true :params {:hello 1}}))
