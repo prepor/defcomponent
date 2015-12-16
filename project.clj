@@ -1,4 +1,4 @@
-(defproject defcomponent "0.1.6"
+(defproject defcomponent "0.1.7-SNAPSHOT"
   :description "FIXME: write description"
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
