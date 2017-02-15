@@ -30,9 +30,21 @@
 ;; Символ в списке зависимостей является сокращением для [:dependant db :db].
 ;; Значит компонент с конструктором db будет определен как зависимость текущего
 ;; компонента и доступен по ключу :db.
+;;
 ;; Так же возможно следующие описание [:inject-to big-app :small-app]. Значит
 ;; компоненту big-app будет добавлена зависимость от текущего компонента в виде
 ;; ключа :small-app
+;;
+;; Альтернативой :inject-to является :pass-to, который позволяет компонету
+;; передать свою зависимость другим. Например, для примера выше, если какому-то
+;; компоненту big-app, например tracer, необходимы какие-то данные от small-app,
+;; в объявлении big-app можно объявить [:pass-to tracer :small-app :as :target].
+;; Таким образом можно строить подсистемы, которые протаскивают переданные зависимости
+;; своим подкомпонентам, но не заставляют пользователя знать о внутреннем устройстве
+;; этой подсистемы.
+;; :pass-to можно также использовать для передачи зависимости всем детям:
+;; [:pass-to :all :small-app :as :target] -- так компонент, переданный в big-app
+;; как :small-app будет передан всем завивимостям big-app (кроме самой small-app).
 ;;
 ;; Формирование системы происходит автоматически исходя из списка необходимых компонентов.
 ;;
@@ -98,19 +110,51 @@
   [f m]
   (into {} (for [[k v] m] [k (f v)])))
 
-;; возращает новый репозиторий, в котором все :inject-to спеки превращены в
-;; dependant спеки соответсвующий компонентов.
-(defn- apply-injections
-  [repository constructors]
-  (reduce (fn [r constructor]
-            (let [component (get repository constructor)]
-              (reduce (fn [r' spec]
-                        (if (= :inject-to (first spec))
-                          (let [[_ to as] spec]
-                            (update-in r' [to ::specs] conj [:dependant constructor as]))
-                          r'))
-                      r (normalize-specs (component-specs component)))))
-          repository constructors))
+(defn- dependant-by-alias [component alias]
+  (let [specs (::specs component)
+        pred (fn [spec] (if-let [[f found last] spec]
+                          (when (and (= f :dependant) (= last alias))
+                            found)))]
+    (if-let [found (first (keep pred specs))]
+      found
+      (throw (Exception. (str "Can't pass unknown component" alias))))))
+
+(defn- all-dependants-except-alias [component key]
+  (let [specs (::specs component)
+        pred (fn [[f dep last]]
+               (when (and (= f :dependant) (not= last key))
+                 dep))]
+    (keep pred specs)))
+
+(defn- apply-pass-to [r constructor component spec]
+  (let [[_ to what _ as] spec
+        found (dependant-by-alias component what)]
+    (if (= :all to)
+      (let [tos (all-dependants-except-alias component what)]
+        (reduce
+         #(update-in %1 [%2 ::specs] conj [:dependant found as])
+         r tos))
+      (update-in r [to ::specs] conj [:dependant found as]))))
+
+;; возращает новый репозиторий, в котором все :inject-to спеки и
+;; :pass-to спеки превращены в dependant спеки соответсвующих компонентов.
+(defn- apply-rules
+  [repository]
+  (reduce
+   (fn [r constructor]
+     (let [component (get r constructor)]
+       (reduce (fn [r' spec]
+                 (cond
+                   (= :inject-to (first spec))
+                     (let [[_ to as] spec]
+                       (update-in r' [to ::specs] conj [:dependant constructor as]))
+
+                   (= :pass-to (first spec))
+                   (apply-pass-to r' constructor component spec)
+
+                   :else r'))
+               r (normalize-specs (component-specs component)))))
+   repository (keys repository)))
 
 (defn- constructor-params
   [file-config params]
@@ -155,7 +199,7 @@
   ([constructors {:keys [start file-config params repo]}]
    (let [params' (constructor-params file-config params)
          repository (-> (make-repository constructors params' repo)
-                        (apply-injections constructors))
+                        apply-rules)
          system (->system repository)]
      (if start
        (component/start system)
@@ -174,5 +218,3 @@
 ;; (defcomponent middleware [[:inject-to app :middle]])
 
 ;; (def s (system [app middleware] {:start true :params {:hello 1}}))
-
-
