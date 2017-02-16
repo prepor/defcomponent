@@ -1,14 +1,24 @@
 # defcomponent
 
-A Clojure library designed to ... well, that part is up to you.
+Обертка вокруг [com.stuartsierra.component](https://github.com/stuartsierra/component), где зависимости между компонентами
+определяются в коде определения компонента, а система строится динамически,
+исходя из запрашиваемых компонентов. Для больших систем таким образом убивается большое количество мусорного кода,
+одновременно уменьшая количество багов (мы не можем забыть объявить
+зависимость или опечататься в ее названии). Добавляются некоторые соглашения: так каждому конструктору компонента может скармливаться
+объект, загруженный из конфиг-файла.
 
 ## Usage
 
-FIXME
+```clojure
+(defcomponent db []
+  [config]
+  (start [this] {:connection :im-connection!})
+  (stop [this]))
 
-## License
+(defcomponent app [db]
+  [config]
+  (start [this])
+  (stop [this]))
+```
 
-Copyright © 2015 FIXME
-
-Distributed under the Eclipse Public License either version 1.0 or (at
-your option) any later version.
+См. коментарии за подробностями.
