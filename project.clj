@@ -1,6 +1,6 @@
-(defproject defcomponent "0.1.7-SNAPSHOT"
-  :description "FIXME: write description"
-  :url "http://example.com/FIXME"
+(defproject defcomponent "0.1.8"
+  :description "wrapper for com.stuartsierra/component"
+  :url "https://github.com/prepor/defcomponent"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.7.0"]
