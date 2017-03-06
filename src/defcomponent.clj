@@ -171,7 +171,6 @@
 ;; :pass-to спеки превращены в dependant спеки соответсвующих компонентов.
 (defn- apply-rules
   [repository]
-
   (reduce
    (fn [r constructor]
      (let [component (get r constructor)]
@@ -186,7 +185,7 @@
 
                    :else r'))
                r (normalize-specs (component-specs component)))))
-   repository (keys-sorted-by-pass-to repository)))
+   repository (doall (keys-sorted-by-pass-to repository))))
 
 
 (defn- constructor-params

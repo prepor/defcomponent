@@ -1,4 +1,4 @@
-(defproject defcomponent "0.1.9"
+(defproject defcomponent "0.2.0"
   :description "wrapper for com.stuartsierra/component"
   :url "https://github.com/prepor/defcomponent"
   :license {:name "Eclipse Public License"
