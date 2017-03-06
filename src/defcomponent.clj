@@ -117,7 +117,7 @@
                             found)))]
     (if-let [found (first (keep pred specs))]
       found
-      (throw (Exception. (str "Can't pass unknown component" alias))))))
+      (throw (Exception. (str "Can't pass unknown component " alias))))))
 
 (defn- all-dependants-except-alias [component key]
   (let [specs (::specs component)
@@ -136,10 +136,42 @@
          r tos))
       (update-in r [to ::specs] conj [:dependant found as]))))
 
+;; чатично сортирует ключи в репозитории, таким образом, чтобы
+;; компоненты с :pass-to были ДО компонентов куда им надо передать
+(defn- keys-sorted-by-pass-to [repository]
+  (let [get-target-for ;; цели для прокидывания
+        (fn [comp spec]
+          (let [[k to what _ as] spec]
+            (when (= k :pass-to)
+              (if (= to :all)
+                (all-dependants-except-alias comp what)
+                to))))
+        pass-to-deps ;; мапинг ключа репозитория на pass-to зависимости
+        (into {} (for [[cons comp] repository
+                       :let [pass-specs (flatten
+                                         (keep (partial get-target-for comp)
+                                               (::specs comp)))]]
+                   (when (not-empty pass-specs)
+                     [cons (set pass-specs)])))
+        cmp (fn [a b]
+              (let [adeps (get pass-to-deps a)
+                    bdeps (get pass-to-deps b)]
+                (cond
+                  ;; если b есть среди зависимостей a -- a должен быть первым
+                  (and adeps (adeps b))
+                  -1
+                  ;; и наоборот
+                  (and bdeps (bdeps a))
+                  1
+                  :else ;; иначе не трогаем
+                  0)))]
+    (sort cmp (keys repository))))
+
 ;; возращает новый репозиторий, в котором все :inject-to спеки и
 ;; :pass-to спеки превращены в dependant спеки соответсвующих компонентов.
 (defn- apply-rules
   [repository]
+
   (reduce
    (fn [r constructor]
      (let [component (get r constructor)]
@@ -154,7 +186,8 @@
 
                    :else r'))
                r (normalize-specs (component-specs component)))))
-   repository (keys repository)))
+   repository (keys-sorted-by-pass-to repository)))
+
 
 (defn- constructor-params
   [file-config params]
@@ -170,7 +203,8 @@
       (nil? constructor) acc
       (get acc constructor) (recur constructors' acc)
       :else
-      (let [component (or (get additions constructor) (apply constructor constructor-params))
+      (let [component (or (get additions constructor)
+                          (apply constructor constructor-params))
             specs (normalize-specs (component-specs component))
             component' (assoc component ::specs specs)]
         (recur (into constructors' (->> specs
