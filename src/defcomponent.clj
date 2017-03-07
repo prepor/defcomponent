@@ -136,9 +136,11 @@
          r tos))
       (update-in r [to ::specs] conj [:dependant found as]))))
 
+;; XXX: полноценная топологическая сортировка?
 ;; чатично сортирует ключи в репозитории, таким образом, чтобы
 ;; компоненты с :pass-to были ДО компонентов куда им надо передать
 (defn- keys-sorted-by-pass-to [repository]
+
   (let [get-target-for ;; цели для прокидывания
         (fn [comp spec]
           (let [[k to what _ as] spec]
@@ -153,6 +155,8 @@
                                                (::specs comp)))]]
                    (when (not-empty pass-specs)
                      [cons (set pass-specs)])))
+        all-deps ;; куда надо pass что-то
+        (apply clojure.set/union (vals pass-to-deps))
         cmp (fn [a b]
               (let [adeps (get pass-to-deps a)
                     bdeps (get pass-to-deps b)]
@@ -163,6 +167,14 @@
                   ;; и наоборот
                   (and bdeps (bdeps a))
                   1
+                  ;; если оба являеются какими-то зависимостями -- не трогаем
+                  (and (all-deps a) (all-deps b))
+                  0
+                  ;; если только a -- a должен быть позже
+                  (all-deps a)
+                  1
+                  (all-deps b)
+                  -1
                   :else ;; иначе не трогаем
                   0)))]
     (sort cmp (keys repository))))
@@ -185,7 +197,7 @@
 
                    :else r'))
                r (normalize-specs (component-specs component)))))
-   repository (doall (keys-sorted-by-pass-to repository))))
+   repository (keys-sorted-by-pass-to repository)))
 
 
 (defn- constructor-params
